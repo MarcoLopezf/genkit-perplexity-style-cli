@@ -1,0 +1,30 @@
+{
+  "name": "genkit",
+  "type": "module",
+  "version": "1.0.0",
+  "description": "Perplexity CLI",
+  "main": "index.js",
+  "scripts": {
+    "start": "ts-node index.ts",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "genkit start -- tsx index.ts"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^20.11.24",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.21.0",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "@genkit-ai/google-genai": "^1.27.0",
+    "@tavily/core": "^0.7.1",
+    "chalk": "^5.6.2",
+    "dotenv": "^17.2.3",
+    "genkit": "^1.27.0",
+    "genkit-cli": "1.26.0",
+    "ora": "^9.0.0",
+    "zod": "^3.25.76"
+  }
+}
