@@ -5,6 +5,7 @@ import {
     researchFlow,
     getAvailableModels,
     RateLimitError,
+    InsufficientBalanceError,
     type FlowOutput,
     type ModelConfig
 } from "./src/agent.js";
@@ -47,7 +48,7 @@ async function selectModel(rl: readline.Interface): Promise<ModelConfig> {
     }
 
     if (availableModels.length === 1) {
-        console.log(chalk.yellow(`\n📌 Usando modelo: ${availableModels[0].displayName}\n`));
+        console.log(chalk.yellow(`\n📌 Using model: ${availableModels[0].displayName}\n`));
         return availableModels[0];
     }
 
@@ -59,14 +60,14 @@ async function selectModel(rl: readline.Interface): Promise<ModelConfig> {
 
     return new Promise((resolve) => {
         const askForModel = () => {
-            rl.question(chalk.green("Elige un número: "), (answer) => {
+            rl.question(chalk.green("Choose a number: "), (answer) => {
                 const selection = parseInt(answer.trim(), 10);
                 if (selection >= 1 && selection <= availableModels.length) {
                     const chosen = availableModels[selection - 1];
-                    console.log(chalk.yellow(`\n✅ Modelo seleccionado: ${chosen.displayName}\n`));
+                    console.log(chalk.yellow(`\n✅ Model selected: ${chosen.displayName}\n`));
                     resolve(chosen);
                 } else {
-                    console.log(chalk.red("Opción inválida. Intenta de nuevo."));
+                    console.log(chalk.red("Invalid option. Try again."));
                     askForModel();
                 }
             });
@@ -97,7 +98,7 @@ async function main() {
     console.log(chalk.dim("  🚪 Type 'exit' to quit or press ⌘+C\n"));
 
     // Set prompt
-    rl.setPrompt(chalk.green("Pregunta lo que quieras saber : "));
+    rl.setPrompt(chalk.green("Ask anything: "));
     rl.prompt();
 
     // Line event listener
@@ -106,7 +107,7 @@ async function main() {
 
         // Handle exit command
         if (input.toLowerCase() === "exit") {
-            console.log(chalk.yellow("\n👋 ¡Hasta luego! Gracias por usar Perplexity CLI.\n"));
+            console.log(chalk.yellow("\n👋 Goodbye! Thanks for using Perplexity CLI.\n"));
             rl.close();
             process.exit(0);
         }
@@ -129,7 +130,7 @@ async function main() {
 
         // Start spinner
         const spinner = ora({
-            text: chalk.blue(`Buscando información con ${selectedModel.displayName}...`),
+            text: chalk.blue(`Searching with ${selectedModel.displayName}...`),
             spinner: "dots",
         }).start();
 
@@ -144,7 +145,7 @@ async function main() {
                 model: selectedModel.modelName,
             });
 
-            spinner.succeed(chalk.green("¡Respuesta lista!"));
+            spinner.succeed(chalk.green("Response ready!"));
 
             // Display the structured response
             console.log(chalk.white(`\n${response.answer}`));
@@ -161,11 +162,15 @@ async function main() {
 
         } catch (error) {
             if (error instanceof RateLimitError) {
-                spinner.fail(chalk.red("⚠️ Límite de uso excedido"));
+                spinner.fail(chalk.red("⚠️ Rate limit exceeded"));
                 console.log(chalk.yellow(`\n${error.message}`));
-                console.log(chalk.dim(`💡 Tip: Escribe 'model' para cambiar a otro modelo.\n`));
+                console.log(chalk.dim(`💡 Tip: Type 'model' to switch to another model.\n`));
+            } else if (error instanceof InsufficientBalanceError) {
+                spinner.fail(chalk.red("💳 Insufficient balance"));
+                console.log(chalk.yellow(`\n${error.message}`));
+                console.log(chalk.dim(`💡 Tip: Type 'model' to switch to another provider.\n`));
             } else {
-                spinner.fail(chalk.red("Error al procesar la pregunta"));
+                spinner.fail(chalk.red("Error processing the question"));
                 console.error(error);
             }
         }
@@ -177,7 +182,7 @@ async function main() {
 
     // Handle close event
     rl.on("close", () => {
-        console.log(chalk.yellow("\n👋 ¡Hasta luego!\n"));
+        console.log(chalk.yellow("\n👋 Goodbye!\n"));
         process.exit(0);
     });
 }

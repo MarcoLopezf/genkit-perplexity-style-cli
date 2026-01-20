@@ -17,10 +17,10 @@ export interface ModelConfig {
 }
 
 export const AVAILABLE_MODELS: ModelConfig[] = [
-    { provider: "gemini", modelName: "googleai/gemini-2.0-flash", displayName: "Gemini 2.0 Flash" },
-    { provider: "gemini", modelName: "googleai/gemini-1.5-flash", displayName: "Gemini 1.5 Flash" },
     { provider: "openai", modelName: "openai/gpt-4o-mini", displayName: "GPT-4o Mini" },
     { provider: "openai", modelName: "openai/gpt-4o", displayName: "GPT-4o" },
+    { provider: "gemini", modelName: "googleai/gemini-2.0-flash", displayName: "Gemini 2.0 Flash" },
+    { provider: "gemini", modelName: "googleai/gemini-1.5-flash", displayName: "Gemini 1.5 Flash" },
 ];
 
 // Validate environment variables
@@ -108,6 +108,21 @@ export class RateLimitError extends Error {
     }
 }
 
+// Custom error class for insufficient balance
+export class InsufficientBalanceError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = "InsufficientBalanceError";
+    }
+}
+
+// Get default model based on available API keys
+export function getDefaultModel(): string {
+    if (openaiApiKey) return "openai/gpt-4o-mini";
+    if (geminiApiKey) return "googleai/gemini-2.0-flash";
+    throw new Error("No API keys configured");
+}
+
 // Define the research flow
 export const researchFlow = ai.defineFlow(
     {
@@ -120,13 +135,16 @@ export const researchFlow = ai.defineFlow(
             // Load the prompt from prompts/research.prompt
             const researchPrompt = ai.prompt("research");
 
+            // Use provided model or get default
+            const modelToUse = input.model || getDefaultModel();
+
             // Execute the prompt with input and options
             const result = await researchPrompt(
                 {
                     question: input.question,
                 },
                 {
-                    model: input.model || "googleai/gemini-2.0-flash",
+                    model: modelToUse,
                     messages: input.history ?? [],
                 }
             );
@@ -135,16 +153,25 @@ export const researchFlow = ai.defineFlow(
 
             if (!output) {
                 return {
-                    answer: result.text ?? "No se pudo generar una respuesta.",
+                    answer: result.text ?? "Could not generate a response.",
                     sources: [],
                 };
             }
 
             return output;
         } catch (error: unknown) {
-            // Handle rate limit errors
+            // Handle API errors
             if (error instanceof Error) {
                 const errorMessage = error.message || "";
+
+                // Handle insufficient balance (402)
+                if (errorMessage.includes("402") || errorMessage.includes("Insufficient Balance") || errorMessage.includes("insufficient_quota")) {
+                    throw new InsufficientBalanceError(
+                        "Insufficient balance in your API account. Please add credits or try a different model."
+                    );
+                }
+
+                // Handle rate limit errors (429)
                 if (errorMessage.includes("429") || errorMessage.includes("RESOURCE_EXHAUSTED") || errorMessage.includes("rate") || errorMessage.includes("quota")) {
                     const retryMatch = errorMessage.match(/retry in (\d+(?:\.\d+)?)/i);
                     const retrySeconds = retryMatch ? Math.ceil(parseFloat(retryMatch[1])) : 30;
@@ -168,6 +195,9 @@ export function getAvailableModels(): ModelConfig[] {
         return false;
     });
 }
+
+// Export the ai instance for use in evaluator
+export { ai };
 
 // Export types for use in index.ts
 export type FlowInput = z.infer<typeof FlowInputSchema>;

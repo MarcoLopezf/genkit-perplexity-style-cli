@@ -1,0 +1,30 @@
+[
+    {
+        "id": "bitcoin-price",
+        "question": "¿Cuál es el precio actual del Bitcoin?",
+        "expected_facts": [
+            "Menciona el precio en USD",
+            "Menciona la fecha u hora de referencia",
+            "Cita una fuente financiera confiable"
+        ]
+    },
+    {
+        "id": "genkit-info",
+        "question": "¿Qué es Firebase Genkit?",
+        "expected_facts": [
+            "Es un framework open source",
+            "Desarrollado por Google",
+            "Soporta TypeScript o Go",
+            "Sirve para construir aplicaciones de IA"
+        ]
+    },
+    {
+        "id": "climate-argentina",
+        "question": "¿Cómo está el clima hoy en Buenos Aires?",
+        "expected_facts": [
+            "Menciona la temperatura actual",
+            "Describe las condiciones climáticas (soleado, nublado, lluvia, etc.)",
+            "Incluye información de la fuente meteorológica"
+        ]
+    }
+]
