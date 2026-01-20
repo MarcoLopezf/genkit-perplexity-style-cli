@@ -1,6 +1,7 @@
 import { genkit, z } from "genkit";
 import { googleAI } from "@genkit-ai/google-genai";
 import { openAI } from "genkitx-openai";
+import { devLocalVectorstore } from "@genkit-ai/dev-local-vectorstore";
 import { tavily, TavilyClient } from "@tavily/core";
 import dotenv from "dotenv";
 import { searchWeb } from "./search.js";
@@ -36,12 +37,24 @@ if (!tavilyApiKey) {
 const tavilyClient: TavilyClient = tavily({ apiKey: tavilyApiKey });
 
 // Build plugins array based on available API keys
-const plugins = [];
+const plugins: any[] = [];
 if (geminiApiKey) {
     plugins.push(googleAI({ apiKey: geminiApiKey }));
 }
 if (openaiApiKey) {
     plugins.push(openAI({ apiKey: openaiApiKey }));
+}
+
+// Add local vector store for codebase RAG (requires Gemini for embeddings)
+if (geminiApiKey) {
+    plugins.push(
+        devLocalVectorstore([
+            {
+                indexName: "codebase",
+                embedder: "googleai/text-embedding-004",
+            },
+        ])
+    );
 }
 
 if (plugins.length === 0) {
@@ -81,6 +94,47 @@ ai.defineTool(
     }
 );
 
+// Define the readCodebase tool for local RAG
+ai.defineTool(
+    {
+        name: "readCodebase",
+        description: "Search the local codebase to find information about this project's implementation, code structure, or specific functions. Use this tool when the user asks about how this project is built, specific files, or implementation details.",
+        inputSchema: z.object({
+            query: z.string().describe("The search query about the codebase"),
+        }),
+        outputSchema: z.object({
+            snippets: z.array(z.object({
+                filepath: z.string(),
+                content: z.string(),
+            })),
+        }),
+    },
+    async (input) => {
+        try {
+            const results = await ai.retrieve({
+                retriever: "devLocalVectorstore/codebase",
+                query: input.query,
+                options: { k: 5 },
+            });
+
+            const snippets = results.map((doc) => ({
+                filepath: (doc.metadata?.filepath as string) || "unknown",
+                content: doc.content.map((c) => ("text" in c ? c.text : "")).join("\n"),
+            }));
+
+            return { snippets };
+        } catch (error) {
+            // If vector store not indexed yet, return helpful message
+            return {
+                snippets: [{
+                    filepath: "info",
+                    content: "Codebase not indexed yet. Run 'npm run index' to index the codebase first.",
+                }],
+            };
+        }
+    }
+);
+
 // Define input schema for the flow
 const FlowInputSchema = z.object({
     question: z.string().describe("The user's question"),
@@ -94,7 +148,7 @@ const AnswerSchema = z.object({
     sources: z.array(z.object({
         title: z.string(),
         url: z.string(),
-    })),
+    })).optional().default([]),
 });
 
 // Custom error class for rate limiting

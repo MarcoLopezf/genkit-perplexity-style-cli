@@ -8,6 +8,7 @@
 
 - 🌐 **Real-time web search** - Uses Tavily to get up-to-date information from the internet
 - 🤖 **Multi-model support** - Choose between Gemini (Google) or GPT (OpenAI)
+- 📚 **Local RAG** - The agent can read and understand its own source code
 - 🛠️ **Tool Calling** - The agent decides when to search using the tools pattern
 - 📝 **Structured Output** - JSON structured responses with Zod schemas
 - 📄 **Dotprompt** - Separation of Prompt Engineering from code
@@ -30,6 +31,7 @@
 ├─────────────────────────────────────────────────────────┤
 │  src/agent.ts      → Flow + Tools + Structured Output   │
 │  src/search.ts     → Tavily search wrapper              │
+│  src/indexer.ts    → Codebase RAG indexer               │
 │  src/evaluator.ts  → Agent testing system               │
 ├─────────────────────────────────────────────────────────┤
 │       Genkit              Gemini / OpenAI               │
@@ -42,7 +44,9 @@
 1. **User selects a model** (Gemini or ChatGPT)
 2. **Asks a question** in natural language
 3. **Agent executes the Flow** loading the prompt from `.prompt`
-4. **The `searchWeb` tool** queries Tavily
+4. **Tools available:**
+   - `searchWeb` - Queries Tavily for internet information
+   - `readCodebase` - Searches the local codebase via RAG
 5. **Model synthesizes** results into a structured JSON
 6. **Response and sources** are displayed separately
 
@@ -79,8 +83,11 @@ OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxx  # Optional
 ## 📖 Usage
 
 ```bash
+# Index the codebase for RAG (first time only)
+npm run index
+
 # Run the CLI
-npx tsx index.ts
+npm start
 
 # Or with the development script (includes Genkit UI)
 npm run dev
@@ -104,18 +111,17 @@ Choose a number: 1
 
 ✅ Model selected: GPT-4o Mini
 
-Ask anything: What are the latest AI news?
+Ask anything: How is the searchWeb tool implemented in this project?
 
 ⠋ Searching with GPT-4o Mini...
 ✔ Response ready!
 
-## Latest AI News
+## searchWeb Implementation
 
-1. **Google launches Gemini 2.0** - The new model promises...
+The `searchWeb` tool is defined in `src/agent.ts` and uses the Tavily API...
 
 📚 Sources:
-  1. [TechCrunch](https://techcrunch.com/...)
-  2. [The Verge](https://theverge.com/...)
+  1. [src/agent.ts](file://src/agent.ts)
 ```
 
 ### Available commands
@@ -124,6 +130,24 @@ Ask anything: What are the latest AI news?
 |---------|-------------|
 | `model` | Switch AI model |
 | `exit` | Exit the CLI |
+
+## 📚 Local RAG (Codebase Search)
+
+The agent can read and understand its own source code using local RAG:
+
+```bash
+# Index the codebase (creates embeddings)
+npm run index
+
+# Then ask about the code
+Ask anything: How does the researchFlow work?
+```
+
+The indexer:
+- Reads all `.ts` files in `src/` and `index.ts`
+- Reads all `.prompt` files in `prompts/`
+- Creates embeddings using `text-embedding-004`
+- Stores vectors locally in `.genkit/`
 
 ## 🧪 Evaluation System
 
@@ -158,6 +182,7 @@ TEST 1/3: bitcoin-price
 |------------|---------|
 | [Google Genkit](https://firebase.google.com/docs/genkit) | AI orchestration framework |
 | [Dotprompt](https://firebase.google.com/docs/genkit/dotprompt) | Declarative prompt files |
+| [Dev Local Vectorstore](https://firebase.google.com/docs/genkit/rag) | Local RAG with embeddings |
 | [Gemini](https://ai.google.dev/) | Google's language model |
 | [OpenAI GPT](https://openai.com/) | OpenAI's language model |
 | [Tavily](https://tavily.com/) | Web search API for AI |
@@ -176,6 +201,7 @@ genkit-perplexity-style-cli/
 ├── src/
 │   ├── agent.ts           # Flow, Tools, Structured Output
 │   ├── search.ts          # Tavily API wrapper
+│   ├── indexer.ts         # Codebase RAG indexer
 │   └── evaluator.ts       # Agent testing system
 ├── index.ts               # CLI and model selection
 ├── package.json
@@ -189,6 +215,7 @@ genkit-perplexity-style-cli/
 ```bash
 npm start        # Run the CLI
 npm run dev      # Run with Genkit Developer UI
+npm run index    # Index codebase for RAG
 npm run eval     # Run agent evaluations
 npm run typecheck # TypeScript validation
 npm test         # Run typecheck + eval
