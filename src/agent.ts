@@ -48,31 +48,14 @@ if (plugins.length === 0) {
     throw new Error("At least one of GEMINI_API_KEY or OPENAI_API_KEY must be set");
 }
 
-// Initialize Genkit with available plugins
+// Initialize Genkit with available plugins and prompts directory
 const ai = genkit({
     plugins,
+    promptDir: "./prompts",
 });
 
-// Define output schema for structured responses
-const SourceSchema = z.object({
-    title: z.string().describe("The title of the source"),
-    url: z.string().describe("The URL of the source"),
-});
-
-const AnswerSchema = z.object({
-    answer: z.string().describe("The complete answer in Markdown format"),
-    sources: z.array(SourceSchema).describe("List of sources used in the answer"),
-});
-
-// Define input schema for the flow
-const FlowInputSchema = z.object({
-    question: z.string().describe("The user's question"),
-    history: z.array(z.any()).optional().describe("Conversation history"),
-    model: z.string().optional().describe("Model to use for generation"),
-});
-
-// Define the search tool
-const searchTool = ai.defineTool(
+// Define the search tool (referenced by the .prompt file)
+ai.defineTool(
     {
         name: "searchWeb",
         description: "Search the internet for information. Use this tool to find current and accurate information about any topic.",
@@ -98,6 +81,22 @@ const searchTool = ai.defineTool(
     }
 );
 
+// Define input schema for the flow
+const FlowInputSchema = z.object({
+    question: z.string().describe("The user's question"),
+    history: z.array(z.any()).optional().describe("Conversation history"),
+    model: z.string().optional().describe("Model to use for generation"),
+});
+
+// Output schema (matches the .prompt file output)
+const AnswerSchema = z.object({
+    answer: z.string(),
+    sources: z.array(z.object({
+        title: z.string(),
+        url: z.string(),
+    })),
+});
+
 // Custom error class for rate limiting
 export class RateLimitError extends Error {
     retryAfterSeconds: number;
@@ -117,44 +116,26 @@ export const researchFlow = ai.defineFlow(
         outputSchema: AnswerSchema,
     },
     async (input) => {
-        const modelToUse = input.model || "googleai/gemini-2.0-flash";
-
-        const systemPrompt = `You are an advanced research assistant. 
-IMPORTANT: You MUST ALWAYS use the searchWeb tool to answer ANY question, no matter how simple. 
-Never answer from your own knowledge - always search first to provide accurate, up-to-date information.
-Even for questions about dates, weather, or simple facts, you MUST use the searchWeb tool.
-
-After searching, synthesize the information into a comprehensive answer following these steps:
-1. Analyze the user's intent and identify key points needed
-2. Use the search tool to find accurate, up-to-date information
-3. Never invent data - if information is not available, state it clearly
-4. Organize findings logically and coherently
-5. Format your response in clear Markdown with headers and lists
-6. Track all sources used for your answer`;
-
         try {
-            const response = await ai.generate({
-                model: modelToUse,
-                system: systemPrompt,
-                prompt: `Question: ${input.question}
+            // Load the prompt from prompts/research.prompt
+            const researchPrompt = ai.prompt("research");
 
-Provide a comprehensive answer based on web search results. Your response MUST be a valid JSON object with this exact structure:
-{
-  "answer": "Your complete markdown-formatted answer here",
-  "sources": [{"title": "Source Title", "url": "https://..."}, ...]
-}`,
-                tools: [searchTool],
-                output: {
-                    schema: AnswerSchema,
+            // Execute the prompt with input and options
+            const result = await researchPrompt(
+                {
+                    question: input.question,
                 },
-                messages: input.history ?? [],
-            });
+                {
+                    model: input.model || "googleai/gemini-2.0-flash",
+                    messages: input.history ?? [],
+                }
+            );
 
-            const output = response.output;
+            const output = result.output;
 
             if (!output) {
                 return {
-                    answer: response.text ?? "No se pudo generar una respuesta.",
+                    answer: result.text ?? "No se pudo generar una respuesta.",
                     sources: [],
                 };
             }
@@ -165,7 +146,6 @@ Provide a comprehensive answer based on web search results. Your response MUST b
             if (error instanceof Error) {
                 const errorMessage = error.message || "";
                 if (errorMessage.includes("429") || errorMessage.includes("RESOURCE_EXHAUSTED") || errorMessage.includes("rate") || errorMessage.includes("quota")) {
-                    // Extract retry time if available
                     const retryMatch = errorMessage.match(/retry in (\d+(?:\.\d+)?)/i);
                     const retrySeconds = retryMatch ? Math.ceil(parseFloat(retryMatch[1])) : 30;
 
